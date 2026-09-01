@@ -56,10 +56,18 @@ public final class Recibos {
       "evento": evento.rawValue,
     ]
     // Sem registro ainda (1º push chegando antes de o POST /players responder):
-    // guarda com player_id nulo — a fila resolve o id na hora do envio.
-    corpo["player_id"] = playerId ?? NSNull()
-
-    let aceito = await rede.enviarOuGuardar("POST", "/api/v1/receipts", corpo)
+    // NÃO vai para a rede — o backend exige player_id (responde 400) e 4xx
+    // descarta na origem. Vai para a fila; o esvaziar resolve o id na hora do
+    // envio e, enquanto ele não existe, ADIA sem gastar tentativa.
+    let aceito: Bool
+    if let playerId {
+      corpo["player_id"] = playerId
+      aceito = await rede.enviarOuGuardar("POST", "/api/v1/receipts", corpo)
+    } else {
+      corpo["player_id"] = NSNull()
+      rede.guardar("POST", "/api/v1/receipts", corpo)
+      aceito = true // guardado = aceito; o dedup marca e a reentrega não duplica
+    }
     if aceito { marcarVisto(chave) }
     return aceito
   }

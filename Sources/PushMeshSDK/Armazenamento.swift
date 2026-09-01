@@ -18,6 +18,7 @@ enum Chave: String {
   case sessoes = "pm:sessoes"
   case lruRecibos = "pm:receipt_lru"
   case fila = "pm:fila"
+  case filaEmVoo = "pm:fila_em_voo"
   case saidaPendente = "pm:logout_pendente"
 }
 

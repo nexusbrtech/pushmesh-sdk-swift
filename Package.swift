@@ -3,13 +3,16 @@ import PackageDescription
 
 let package = Package(
   name: "PushMeshSDK",
-  platforms: [.iOS(.v15)],
+  // O macOS não é plataforma de produto — está aqui só para a suíte de testes
+  // rodar com `swift test` em qualquer Mac, sem simulador. As peças de iOS
+  // (swizzle, UNUserNotificationCenter, entitlement) não têm teste de unidade:
+  // a prova delas é o ritual de fronteira no simulador, não esta suíte.
+  platforms: [.iOS(.v15), .macOS(.v12)],
   products: [
     .library(name: "PushMeshSDK", targets: ["PushMeshSDK"]),
   ],
   targets: [
-    // Sem alvo de testes ainda — declarar um alvo vazio quebra o `swift build`
-    // de quem baixa o pacote. Os testes entram junto com o primeiro release.
     .target(name: "PushMeshSDK"),
+    .testTarget(name: "PushMeshSDKTests", dependencies: ["PushMeshSDK"]),
   ]
 )

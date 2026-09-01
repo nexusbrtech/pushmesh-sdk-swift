@@ -99,7 +99,7 @@ final class Apns: NSObject {
   #if canImport(UIKit)
   @objc func pm_application(_ app: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken dados: Data) {
     Apns.compartilhado.aoReceberToken?(dados)
-    let guardado = Selector("pm_original_application:didRegisterForRemoteNotificationsWithDeviceToken:")
+    let guardado = Selector(("pm_original_application:didRegisterForRemoteNotificationsWithDeviceToken:"))
     if (self as AnyObject).responds(to: guardado) {
       _ = (self as AnyObject).perform(guardado, with: app, with: dados)
     }
@@ -107,7 +107,7 @@ final class Apns: NSObject {
 
   @objc func pm_application(_ app: UIApplication, didFailToRegisterForRemoteNotificationsWithError erro: Error) {
     Apns.compartilhado.aoFalharToken?(erro)
-    let guardado = Selector("pm_original_application:didFailToRegisterForRemoteNotificationsWithError:")
+    let guardado = Selector(("pm_original_application:didFailToRegisterForRemoteNotificationsWithError:"))
     if (self as AnyObject).responds(to: guardado) {
       _ = (self as AnyObject).perform(guardado, with: app, with: erro)
     }

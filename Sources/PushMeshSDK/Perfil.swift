@@ -4,7 +4,7 @@ import UIKit
 #endif
 
 /** Versão deste SDK, reportada em `sdk_versao` — diagnóstico de campo sem chute. */
-public let versaoDoSDK = "0.1.0-swift"
+public let versaoDoSDK = "0.1.1-swift"
 
 /**
  Perfil do aparelho.

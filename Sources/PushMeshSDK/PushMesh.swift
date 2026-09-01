@@ -73,6 +73,11 @@ public enum PushMesh {
     estado.recibos = Recibos(rede: estado.rede!, armazenamento: estado.armazenamento)
     estado.playerId = estado.armazenamento.texto(.playerId)
     estado.usuarioExterno = estado.armazenamento.texto(.usuarioExterno)
+    // O logout pendente PRECISA sobreviver ao boot: `sair()` com rede fora não
+    // propagou ainda, e é este boot que vai concluir o trabalho (no registro,
+    // com o null explícito, ou esvaziando o PUT guardado). Era só memória — a
+    // chave existia no enum e nunca era lida.
+    estado.saidaPendente = estado.armazenamento.texto(.saidaPendente) == "1"
     estado.armazenamento.guardar((estado.armazenamento.inteiro(.sessoes) ?? 0) + 1, em: .sessoes)
 
     Apns.compartilhado.instalar(
@@ -80,6 +85,11 @@ public enum PushMesh {
         let hex = Apns.compartilhado.tokenEmHex(dados)
         estado.token = hex
         estado.armazenamento.guardar(hex, em: .token)
+        // Token que chega DEPOIS do `esperarToken` estourar os 10s não podia
+        // mais registrar naquela sessão — o app ficava mudo até a próxima
+        // abertura. O registro é idempotente pelo hash: disparar aqui é
+        // barato e o pior caso é um POST a mais que o upsert absorve.
+        if estado.appId != nil { Task { _ = await registrar() } }
         let esperando = estado.esperandoToken
         estado.esperandoToken = []
         esperando.forEach { $0.resume(returning: hex) }
@@ -121,6 +131,8 @@ public enum PushMesh {
     estado.usuarioExterno = usuarioExterno
     estado.saidaPendente = false
     estado.armazenamento.guardar(usuarioExterno, em: .usuarioExterno)
+    // Login cancela logout pendente: o mais novo vence (mesma regra do JS).
+    estado.armazenamento.apagar(.saidaPendente)
     guard let appId = estado.appId else { return }
     if let id = playerId {
       await estado.rede?.enviarOuGuardar("PUT", "/api/v1/players/\(id)", [
@@ -142,11 +154,15 @@ public enum PushMesh {
     estado.usuarioExterno = nil
     estado.saidaPendente = true
     estado.armazenamento.apagar(.usuarioExterno)
+    // A flag é gravada ANTES de qualquer guard: sem playerId para onde mandar
+    // o PUT, ela é a ÚNICA memória do logout — e é o próximo registro quem
+    // leva o null explícito. "Entregue OU guardado" não limpa: só a
+    // confirmação do registro limpa (o PUT da fila pode ainda ser descartado).
+    estado.armazenamento.guardar("1", em: .saidaPendente)
     guard let appId = estado.appId, let id = playerId else { return }
-    let ok = await estado.rede?.enviarOuGuardar("PUT", "/api/v1/players/\(id)", [
+    _ = await estado.rede?.enviarOuGuardar("PUT", "/api/v1/players/\(id)", [
       "app_id": appId, "external_user_id": NSNull(),
     ])
-    if ok == true { estado.saidaPendente = false }
   }
 
   // MARK: - Permissão
@@ -256,18 +272,11 @@ public enum PushMesh {
       return nil
     }
 
-    var payload: [String: Any] = [
-      "app_id": appId,
-      "identifier": token,
-      "device_type": 0,      // 0 = iOS
-      "transporte": "apns",  // APNs direto, sem Firebase
-    ]
-    if let usuario = estado.usuarioExterno {
-      payload["external_user_id"] = usuario
-    } else if estado.saidaPendente {
-      payload["external_user_id"] = NSNull()
-    }
-    payload.merge(Perfil.campos(appVersion: estado.appVersion)) { atual, _ in atual }
+    let payload = montarPayloadDeRegistro(
+      appId: appId, token: token,
+      usuarioExterno: estado.usuarioExterno,
+      saidaPendente: estado.saidaPendente,
+      appVersion: estado.appVersion)
 
     let hash = hashDoPayload(payload)
     if estado.armazenamento.texto(.regHash) == hash, let id = estado.armazenamento.texto(.playerId) {
@@ -287,11 +296,50 @@ public enum PushMesh {
     estado.armazenamento.guardar(id, em: .playerId)
     estado.armazenamento.guardar(hash, em: .regHash)
     estado.armazenamento.guardar("apns", em: .transporte)
-    if estado.saidaPendente { estado.saidaPendente = false }
+    if estado.saidaPendente {
+      // O registro que acabou de subir JÁ levou o null explícito (a flag entra
+      // no payload e no hash): o logout propagou, a dívida acabou.
+      estado.saidaPendente = false
+      estado.armazenamento.apagar(.saidaPendente)
+    }
     return id
   }
 
-  private static func hashDoPayload(_ payload: [String: Any]) -> String {
+  /**
+   Montagem do payload de `POST /api/v1/players` — função PURA, para ser testada
+   sem aparelho. O contrato das chaves é o do SDK de JS (`players.ts` →
+   `buildRegisterPayload`): o servidor ignora em silêncio chave com nome fora do
+   contrato (foi assim que o iOS ficou meses sem modelo no painel, sem um erro
+   em lugar nenhum), por isso o conjunto EXATO de chaves é objeto de teste.
+   */
+  static func montarPayloadDeRegistro(appId: String, token: String,
+                                      usuarioExterno: String?, saidaPendente: Bool,
+                                      appVersion: String?) -> [String: Any] {
+    var payload: [String: Any] = [
+      "app_id": appId,
+      "identifier": token,
+      "device_type": 0,      // 0 = iOS
+      "transporte": "apns",  // APNs direto, sem Firebase
+    ]
+    // TRI-STATE: ausente (o servidor não mexe) × string (amarra) × null
+    // explícito (limpa um logout que ainda não propagou — omitir deixaria o
+    // id do usuário colado no aparelho para sempre).
+    if let usuarioExterno {
+      payload["external_user_id"] = usuarioExterno
+    } else if saidaPendente {
+      payload["external_user_id"] = NSNull()
+    }
+    payload.merge(Perfil.campos(appVersion: appVersion)) { atual, _ in atual }
+    return payload
+  }
+
+  /**
+   Hash do payload de registro, para o "nada mudou ⇒ nem chama o servidor".
+   As chaves são ordenadas DE PROPÓSITO: dicionário Swift não tem ordem de
+   inserção, e um hash que dependesse dela faria o app re-registrar ao acaso a
+   cada abertura.
+   */
+  static func hashDoPayload(_ payload: [String: Any]) -> String {
     let chaves = payload.keys.sorted()
     let texto = chaves.map { "\($0)=\(payload[$0].map { "\($0)" } ?? "nil")" }.joined(separator: "&")
     var h: UInt64 = 5381

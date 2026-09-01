@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+Pods/
+xcuserdata/
+*.xcuserstate
+# O app de laboratório é montado por Exemplo/buildar.sh — artefato, não fonte.
+Exemplo/*.app/

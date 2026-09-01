@@ -21,17 +21,34 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     tela.escrever("sdk \(versaoDoSDK)")
 
     Task {
+      // Laboratório dirigido por variável de ambiente (via SIMCTL_CHILD_* no
+      // `simctl launch`): PM_BASE_URL aponta o SDK para um servidor local de
+      // observação, e PM_CENARIO escolhe o roteiro — é assim que se prova a
+      // fronteira do logout offline sem depender de tela.
+      let env = ProcessInfo.processInfo.environment
+      let cenario = env["PM_CENARIO"] ?? "arranque"
+      tela.escrever("cenário: \(cenario) · base: \(env["PM_BASE_URL"] ?? "oficial")")
+
       let inicio = Date()
       let id = await PushMesh.iniciar(
         appId: "01a0545f-32af-72a1-b8b8-454ac678aa4f",
         appVersion: "1.0.0",
+        baseUrl: env["PM_BASE_URL"],
         pedirPermissao: true
       )
       let ms = Int(Date().timeIntervalSince(inicio) * 1000)
       tela.escrever("iniciar resolveu em \(ms) ms")
       tela.escrever(id == nil ? "player_id = NULO — não registrou" : "player_id = \(id!)")
-      await PushMesh.entrar("lab-swift-1")
-      tela.escrever("entrar(\"lab-swift-1\") ok")
+      switch cenario {
+      case "login":
+        await PushMesh.entrar("lab-swift-1")
+        tela.escrever("entrar(\"lab-swift-1\") ok")
+      case "logout":
+        await PushMesh.sair()
+        tela.escrever("sair() ok — logout pendente propagando")
+      default:
+        break
+      }
       for (chave, valor) in PushMesh.diagnostico().sorted(by: { $0.key < $1.key }) {
         tela.escrever("  \(chave) = \(valor)")
       }

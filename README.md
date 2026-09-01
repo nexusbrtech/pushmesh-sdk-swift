@@ -13,6 +13,12 @@ Swift Package Manager:
 .package(url: "https://github.com/pushmesh/sdk-swift", from: "0.1.0")
 ```
 
+CocoaPods, para quem não usa SPM:
+
+```ruby
+pod 'PushMeshSDK', '~> 0.1.0'
+```
+
 ## Usar — uma chamada
 
 ```swift
@@ -87,3 +93,24 @@ Hoje o recibo de iOS conta **o que o app vê**: app aberto ou toque na
 notificação. Com o app em segundo plano ou morto, o push chega e aparece, mas o
 recibo não sai. No Android o recibo é real nos três estados. A extensão de
 serviço (`NotificationService`) é o lugar do conserto e é a próxima frente.
+
+## Testes
+
+```sh
+cd pushmesh/sdk-swift && swift test
+```
+
+A suíte cobre o que dá para provar **sem aparelho**: a fila offline (teto de
+500 com descarte FIFO, o orçamento de 10 tentativas, backoff com jitter,
+`Retry-After` honrado, o máximo de 5 pedidos em voo, o lote em voo que
+sobrevive à morte do app no meio do esvaziar, o coalescing de PUTs que impede
+escrita velha de voltar por cima da nova), o dedup LRU-64 do recibo (a
+marcação só depois do aceite) e a montagem do payload de registro (o conjunto
+exato de chaves do contrato). Concorrência é provada contra um servidor TCP
+real em loopback — `URLProtocol` serializa os requests e mediria pico 1
+sempre.
+
+**O que esta suíte NÃO prova:** registro com APNs de verdade, entitlement,
+swizzle, notificação aparecendo na tela. Essas fronteiras só caem no
+simulador/aparelho — é o ritual de fronteira do projeto
+(`memoria/postmortem-falha-silenciosa.md`), e suíte verde não o substitui.
