@@ -10,7 +10,7 @@ aparelho duplicado no painel.
 Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/pushmesh/sdk-swift", from: "0.1.0")
+.package(url: "https://github.com/nexusbrtech/pushmesh-sdk-swift", from: "0.1.0")
 ```
 
 CocoaPods, para quem não usa SPM:

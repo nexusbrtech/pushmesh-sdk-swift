@@ -18,9 +18,9 @@ Pod::Spec.new do |s|
   s.homepage         = 'https://pushmesh.io'
   # TODO(dono): definir a licença do SDK antes de publicar — o repositório
   # monorepo não tem LICENSE. Este valor é placeholder.
-  s.license          = { :type => 'Proprietary' }
+  s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = { 'PushMesh' => 'dev@pushmesh.io' }
-  s.source           = { :git => 'https://github.com/pushmesh/sdk-swift.git', :tag => s.version.to_s }
+  s.source           = { :git => 'https://github.com/nexusbrtech/pushmesh-sdk-swift.git', :tag => s.version.to_s }
 
   s.ios.deployment_target = '15.0'
   s.swift_version    = '5.9'
