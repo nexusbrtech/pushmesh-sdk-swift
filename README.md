@@ -1,25 +1,27 @@
-# PushMesh SDK — Swift nativo
+# PushMesh SDK — native Swift
 
-Push para apps **Swift/UIKit/SwiftUI**, sem React Native. Fala o mesmo contrato
-do SDK de JavaScript e usa as **mesmas chaves de armazenamento** (`pm:*`): um app
-que migra de React Native para nativo mantém o mesmo `player_id` e não vira um
-aparelho duplicado no painel.
+> **Português:** [README.pt-BR.md](README.pt-BR.md)
 
-## Instalar
+Push for **Swift/UIKit/SwiftUI** apps, without React Native. It speaks the same
+contract as the JavaScript SDK and uses the **same storage keys** (`pm:*`): an
+app migrating from React Native to native keeps the same `player_id` and does
+not become a duplicate device in the panel.
+
+## Install
 
 Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/nexusbrtech/pushmesh-sdk-swift", from: "0.1.0")
+.package(url: "https://github.com/nexusbrtech/pushmesh-sdk-swift", from: "0.1.1")
 ```
 
-CocoaPods, para quem não usa SPM:
+CocoaPods, if SPM is not your thing:
 
 ```ruby
-pod 'PushMeshSDK', '~> 0.1.0'
+pod 'PushMeshSDK', '~> 0.1.1'
 ```
 
-## Usar — uma chamada
+## Use — one call
 
 ```swift
 import PushMeshSDK
@@ -28,45 +30,49 @@ import PushMeshSDK
 final class AppDelegate: UIResponder, UIApplicationDelegate {
   func application(_ app: UIApplication,
                    didFinishLaunchingWithOptions o: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-    Task { await PushMesh.iniciar(appId: "SEU_APP_ID", pedirPermissao: true) }
+    Task { await PushMesh.iniciar(appId: "YOUR_APP_ID", pedirPermissao: true) }
     return true
   }
 }
 ```
 
-Não precisa de mais nada. O token do APNs é capturado sozinho, o aparelho se
-registra e o recibo de entrega volta quando o push chega.
+Nothing else is needed. The APNs token is captured on its own, the device
+registers itself, and the delivery receipt comes back when the push arrives.
 
-### `pedirPermissao` é opt-in de propósito
+> The public API is in Portuguese by design — it is the convention of the whole
+> product, applied consistently. `iniciar` = init · `entrar`/`sair` =
+> login/logout · `pedirPermissao` = request permission.
 
-O padrão é `false`. No iOS a pessoa é perguntada **uma única vez na vida do app**
-— queimar essa chance no primeiro segundo, antes de ela entender o que ganha, é
-a forma mais cara de perder um assinante. Chame `PushMesh.pedirPermissao()` no
-momento em que fizer sentido no seu produto.
+### `pedirPermissao` is opt-in on purpose
 
-## No Xcode, dois passos que a Apple obriga
+The default is `false`. On iOS a person is asked **once in the app's lifetime**
+— burning that chance in the first second, before they understand what they
+get, is the most expensive way to lose a subscriber. Call
+`PushMesh.pedirPermissao()` at the moment that makes sense in your product.
+
+## In Xcode, the two steps Apple requires
 
 1. **Signing & Capabilities → + Capability → Push Notifications**
 2. **Background Modes → Remote notifications**
 
-Sem o primeiro, o sistema **nunca** entrega um token e o SDK avisa exatamente
-isso em `PushMesh.ultimoAviso`.
+Without the first one the system **never** hands out a token — and the SDK says
+exactly that in `PushMesh.ultimoAviso`.
 
 ## API
 
 | | |
 |---|---|
-| `iniciar(appId:appVersion:baseUrl:pedirPermissao:)` | liga o SDK e registra o aparelho |
-| `entrar(_:)` / `sair()` | amarra/desamarra o usuário do seu app |
-| `pedirPermissao()` | pede a permissão e reporta ao servidor |
-| `playerId`, `token` | estado do registro |
-| `diagnostico()` | retrato do estado, para depurar |
-| `ultimoAviso` | o último aviso do SDK, legível pelo app |
+| `iniciar(appId:appVersion:baseUrl:pedirPermissao:)` | turns the SDK on and registers the device |
+| `entrar(_:)` / `sair()` | binds/unbinds your app's user |
+| `pedirPermissao()` | requests permission and reports it to the server |
+| `playerId`, `token` | registration state |
+| `diagnostico()` | a snapshot of the state, for debugging |
+| `ultimoAviso` | the SDK's last warning, readable by the app |
 
-### Sem swizzle
+### Without swizzling
 
-O SDK captura os callbacks do sistema por swizzling. Se o seu app já tem outro
-SDK de push e você prefere controlar, chame na mão:
+The SDK captures the system callbacks via swizzling. If your app already has
+another push SDK and you prefer control, call it by hand:
 
 ```swift
 func application(_ a: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken t: Data) {
@@ -79,38 +85,38 @@ func userNotificationCenter(_ c: UNUserNotificationCenter, willPresent n: UNNoti
 }
 ```
 
-## `ultimoAviso` — por que existe
+## `ultimoAviso` — why it exists
 
-No Android o `adb logcat` mostra o diagnóstico do SDK. No iOS não existe
-equivalente: o aviso morre num console que só aparece com o depurador aberto.
-Medimos isso em campo — a causa de uma falha ficou invisível por horas. Um SDK
-que se propõe a gritar precisa gritar onde dá para escutar, então o último aviso
-fica disponível por API.
+On Android, `adb logcat` shows the SDK's diagnostics. On iOS there is no
+equivalent: the warning dies in a console that only exists with the debugger
+attached. We measured this in the field — the cause of a failure stayed
+invisible for hours. An SDK that promises to shout must shout where it can be
+heard, so the last warning is available as API.
 
-## Limite conhecido — recibo em segundo plano
+## Known limit — background receipts
 
-Hoje o recibo de iOS conta **o que o app vê**: app aberto ou toque na
-notificação. Com o app em segundo plano ou morto, o push chega e aparece, mas o
-recibo não sai. No Android o recibo é real nos três estados. A extensão de
-serviço (`NotificationService`) é o lugar do conserto e é a próxima frente.
+Today the iOS delivery receipt counts **what the app sees**: app open, or a tap
+on the notification. With the app in background or killed, the push arrives and
+shows, but no receipt goes out. On Android the receipt is real in all three
+states. The service extension (`NotificationService`) is where the fix belongs,
+and it is the next front.
 
-## Testes
+## Tests
 
 ```sh
-cd pushmesh/sdk-swift && swift test
+swift test
 ```
 
-A suíte cobre o que dá para provar **sem aparelho**: a fila offline (teto de
-500 com descarte FIFO, o orçamento de 10 tentativas, backoff com jitter,
-`Retry-After` honrado, o máximo de 5 pedidos em voo, o lote em voo que
-sobrevive à morte do app no meio do esvaziar, o coalescing de PUTs que impede
-escrita velha de voltar por cima da nova), o dedup LRU-64 do recibo (a
-marcação só depois do aceite) e a montagem do payload de registro (o conjunto
-exato de chaves do contrato). Concorrência é provada contra um servidor TCP
-real em loopback — `URLProtocol` serializa os requests e mediria pico 1
-sempre.
+The suite covers what can be proven **without a device**: the offline queue
+(cap of 500 with FIFO discard, the 10-attempt budget, backoff with jitter,
+`Retry-After` honored, at most 5 requests in flight, the in-flight batch that
+survives the app dying mid-flush, PUT coalescing that keeps an old write from
+landing on top of a new one), the receipt's LRU-64 dedup (marked only after
+acceptance) and the registration payload assembly (the contract's exact key
+set). Concurrency is proven against a real TCP server on loopback —
+`URLProtocol` serializes requests and would always measure a peak of 1.
 
-**O que esta suíte NÃO prova:** registro com APNs de verdade, entitlement,
-swizzle, notificação aparecendo na tela. Essas fronteiras só caem no
-simulador/aparelho — é o ritual de fronteira do projeto
-(`memoria/postmortem-falha-silenciosa.md`), e suíte verde não o substitui.
+**What this suite does NOT prove:** registration against real APNs,
+entitlements, swizzling, a notification showing on screen. Those boundaries
+only fall on a simulator/device — that is the project's boundary ritual, and a
+green suite does not replace it.
