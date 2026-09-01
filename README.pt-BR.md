@@ -44,13 +44,32 @@ O padrão é `false`. No iOS a pessoa é perguntada **uma única vez na vida do 
 a forma mais cara de perder um assinante. Chame `PushMesh.pedirPermissao()` no
 momento em que fizer sentido no seu produto.
 
-## No Xcode, dois passos que a Apple obriga
+## No Xcode, os passos que a Apple obriga
 
 1. **Signing & Capabilities → + Capability → Push Notifications**
 2. **Background Modes → Remote notifications**
 
 Sem o primeiro, o sistema **nunca** entrega um token e o SDK avisa exatamente
 isso em `PushMesh.ultimoAviso`.
+
+### 3º passo — só para push com IMAGEM
+
+O iOS só baixa a imagem de um push dentro de uma **Notification Service
+Extension** — sem ela, a notificação chega sem imagem e sem erro. O arquivo
+pronto está em [`Extras/NotificationService/`](Extras/NotificationService/):
+
+1. **File → New → Target → Notification Service Extension** (mesmo Team do app;
+   o bundle nasce como `seu.bundle.NotificationService` — deixe assim)
+2. Substitua o `NotificationService.swift` gerado pelo nosso, de `Extras/`
+3. Confira o **deployment target** da extensão: igual ou menor que o do app —
+   extensão com mínimo maior simplesmente **não roda** no aparelho antigo, sem
+   erro nenhum
+
+É exatamente este arquivo que o plugin de Expo instala sozinho — provado em
+aparelho em 01/09/2026 (*"service extension delivered mutated content"* no log
+do sistema). Num app Swift puro o passo é manual, e ainda não foi exercitado
+por nós fora do Expo: se algo falhar, `ultimoAviso` e o log do sistema são os
+lugares para olhar.
 
 ## API
 
