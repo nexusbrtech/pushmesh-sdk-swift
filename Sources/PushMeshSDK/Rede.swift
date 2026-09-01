@@ -116,6 +116,21 @@ final class Rede {
   /// superada por entrega nunca volta para o servidor.
   private var superadas: [String: TimeInterval] = [:]
 
+  /// Chamado quando o servidor responde 404 para /receipts ou /players/{id}:
+  /// o player foi APAGADO do outro lado (painel/LGPD), e sem cura o aparelho
+  /// vira órfão silencioso — o cache de registro impede o re-POST para sempre.
+  /// Quem cura é o PushMesh (esquece o cache e registra de novo); aqui só o
+  /// gatilho. Mesma cicatriz do irmão de JS (players.ts, registroPerdido).
+  var aoPerderRegistro: ((String) -> Void)?
+
+  private func avisaSePerdeuRegistro(_ status: Int, _ caminho: String) {
+    guard status == 404 else { return }
+    guard caminho.hasPrefix("/api/v1/receipts") || caminho.hasPrefix("/api/v1/players/") else {
+      return
+    }
+    aoPerderRegistro?(caminho)
+  }
+
   /// Teto da fila. Acima disso descarta o MAIS ANTIGO — o recibo de agora vale
   /// mais que o de três dias atrás, que o servidor provavelmente já contou.
   private let tetoDaFila = 500
@@ -187,6 +202,7 @@ final class Rede {
         return true
       }
       if Rede.descartavel(r.status) {
+        avisaSePerdeuRegistro(r.status, caminho)
         registro.warning("[PushMesh] \(metodo, privacy: .public) \(caminho, privacy: .public) recusado (\(r.status)) — retry não corrige payload inválido, descartado")
         return false
       }
@@ -368,6 +384,7 @@ final class Rede {
     }
     let status = r?.status ?? 0
     if Rede.descartavel(status) {
+      avisaSePerdeuRegistro(status, item.caminho)
       registro.warning("[PushMesh] item da fila descartado (\(status)) em \(item.caminho, privacy: .public) — retry não corrige payload inválido")
       return nil
     }

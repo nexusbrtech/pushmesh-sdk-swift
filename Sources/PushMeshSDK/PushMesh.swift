@@ -30,6 +30,8 @@ public enum PushMesh {
     var recibos: Recibos?
     var armazenamento = Armazenamento()
     var ultimoAviso: String?
+    /// Cura do registro perdido já rodou nesta sessão (guarda anti-rajada).
+    var registroPerdidoTratado = false
     var esperandoToken: [CheckedContinuation<String?, Never>] = []
   }
   private static let estado = Estado()
@@ -70,6 +72,13 @@ public enum PushMesh {
     estado.appId = appId
     estado.appVersion = appVersion
     estado.rede = Rede(baseUrl: baseUrl, armazenamento: estado.armazenamento)
+    // O servidor pode APAGAR este aparelho por fora (o "apagar audiência" do
+    // painel, LGPD). Sem esta cura o cache de registro faz o app achar que
+    // está registrado para sempre — órfão silencioso, medido em 01/09/2026.
+    // Mesma cicatriz e mesmo desenho do SDK de JS (players.ts).
+    estado.rede?.aoPerderRegistro = { origem in
+      Task { await registroPerdido(origem) }
+    }
     estado.recibos = Recibos(rede: estado.rede!, armazenamento: estado.armazenamento)
     estado.playerId = estado.armazenamento.texto(.playerId)
     estado.usuarioExterno = estado.armazenamento.texto(.usuarioExterno)
@@ -264,6 +273,24 @@ public enum PushMesh {
    registro com o hash de outro, e o recibo (HMAC amarrado ao player_id) passou a
    voltar 403 — entrega perdida sem ninguém ver.
    */
+  /// 404 em /receipts ou /players/{id}: o player não existe mais do outro
+  /// lado. Esquece o registro local e registra DE NOVO — o POST é upsert por
+  /// token e recria na hora. Uma vez por sessão: 404 avulso de notificação
+  /// velha não pode virar rajada de re-registros.
+  static func registroPerdido(_ origem: String) async {
+    if estado.registroPerdidoTratado { return }
+    estado.registroPerdidoTratado = true
+    avisar(
+      "o servidor não conhece mais este aparelho (404 em \(origem)) — o "
+        + "registro local será refeito agora. Se a audiência foi apagada no "
+        + "painel, isto é o aparelho voltando sozinho."
+    )
+    estado.playerId = nil
+    estado.armazenamento.apagar(.playerId)
+    estado.armazenamento.apagar(.regHash)
+    _ = await registrar()
+  }
+
   @discardableResult
   private static func registrar() async -> String? {
     guard let appId = estado.appId, let rede = estado.rede else { return nil }
